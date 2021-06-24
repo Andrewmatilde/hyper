@@ -125,6 +125,7 @@ impl Http1Transaction for Server {
             );
             let mut req = httparse::Request::new(&mut headers);
             let bytes = buf.as_ref();
+
             match req.parse(bytes) {
                 Ok(httparse::Status::Complete(parsed_len)) => {
                     trace!("Request.parse Complete({})", parsed_len);

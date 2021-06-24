@@ -55,6 +55,7 @@ where
                 reading: Reading::Init,
                 writing: Writing::Init,
                 upgrade: None,
+                error_return: false,
                 // We assume a modern world where the remote speaks HTTP/1.1.
                 // If they tell us otherwise, we'll downgrade in `read_head`.
                 version: Version::HTTP_11,
@@ -103,6 +104,11 @@ where
     #[cfg(feature = "ffi")]
     pub(crate) fn set_raw_headers(&mut self, enabled: bool) {
         self.state.raw_headers = enabled;
+    }
+
+    #[cfg(feature = "error_return")]
+    pub(crate) fn set_error_return(&mut self, enabled: bool) {
+        self.state.error_return = enabled;
     }
 
     pub(crate) fn into_inner(self) -> (I, Bytes) {
@@ -160,7 +166,6 @@ where
     ) -> Poll<Option<crate::Result<(MessageHead<T::Incoming>, DecodedLength, Wants)>>> {
         debug_assert!(self.can_read_head());
         trace!("Conn::read_head");
-
         let msg = match ready!(self.io.parse::<T>(
             cx,
             ParseContext {
@@ -176,7 +181,6 @@ where
             Ok(msg) => msg,
             Err(e) => return self.on_read_head_error(e),
         };
-
         // Note: don't deconstruct `msg` into local variables, it appears
         // the optimizer doesn't remove the extra copies.
 
@@ -660,6 +664,9 @@ where
     // - Client: there is nothing we can do
     // - Server: if Response hasn't been written yet, we can send a 4xx response
     fn on_parse_error(&mut self, err: crate::Error) -> crate::Result<()> {
+        if self.state.error_return {
+            return Err(err);
+        }
         if let Writing::Init = self.state.writing {
             if self.has_h2_prefix() {
                 return Err(crate::Error::new_version_h2());
@@ -786,6 +793,8 @@ struct State {
     writing: Writing,
     /// An expected pending HTTP upgrade.
     upgrade: Option<crate::upgrade::Pending>,
+    /// Return error suddenly when it comes to parse error if true.
+    error_return: bool,
     /// Either HTTP/1.0 or 1.1 connection
     version: Version,
 }

@@ -97,6 +97,7 @@ pub struct Http<E = Exec> {
     mode: ConnectionMode,
     max_buf_size: Option<usize>,
     pipeline_flush: bool,
+    error_return: bool,
 }
 
 /// The internal mode of HTTP protocol which indicates the behavior when a parse error occurs.
@@ -264,6 +265,7 @@ impl Http {
             mode: ConnectionMode::default(),
             max_buf_size: None,
             pipeline_flush: false,
+            error_return: false,
         }
     }
 }
@@ -501,7 +503,16 @@ impl<E> Http<E> {
         self.pipeline_flush = enabled;
         self
     }
-
+    /// Return error when it comes to parse error
+    ///
+    /// Experimental, may have bugs.
+    /// Only works well in low level  http1 interface.
+    ///
+    /// Default is false.
+    pub fn error_return(&mut self, enabled: bool) -> &mut Self {
+        self.error_return = enabled;
+        self
+    }
     /// Set the executor used to spawn background tasks.
     ///
     /// Default uses implicit default (like `tokio::spawn`).
@@ -517,6 +528,7 @@ impl<E> Http<E> {
             mode: self.mode,
             max_buf_size: self.max_buf_size,
             pipeline_flush: self.pipeline_flush,
+            error_return: self.error_return,
         }
     }
 
@@ -574,6 +586,7 @@ impl<E> Http<E> {
                     conn.set_preserve_header_case();
                 }
                 conn.set_flush_pipeline(self.pipeline_flush);
+                conn.set_error_return(self.error_return);
                 if let Some(max) = self.max_buf_size {
                     conn.set_max_buf_size(max);
                 }
@@ -583,7 +596,6 @@ impl<E> Http<E> {
                 }
             }};
         }
-
         let proto = match self.mode {
             #[cfg(feature = "http1")]
             #[cfg(not(feature = "http2"))]
@@ -610,6 +622,27 @@ impl<E> Http<E> {
             },
             #[cfg(not(all(feature = "http1", feature = "http2")))]
             fallback: PhantomData,
+        }
+    }
+
+    /// serve_connection and return parts
+    pub async fn serve_connection_with_parts<S, I, Bd>(&self, io: I, service: S) -> (crate::Result<()>, Option<Parts<I,S>>)
+        where
+            S: HttpService<Body, ResBody = Bd>,
+            S::Error: Into<Box<dyn StdError + Send + Sync>>,
+            Bd: HttpBody + 'static,
+            Bd::Error: Into<Box<dyn StdError + Send + Sync>>,
+            I: AsyncRead + AsyncWrite + Unpin,
+            E: ConnStreamExec<S::Future, Bd>,
+    {
+        let mut connection = self.serve_connection(io, service);
+        return match Pin::new(connection.conn.as_mut().unwrap()).await {
+            Ok(_) => {
+                (Ok(()), connection.try_into_parts())
+            },
+            Err(e) => {
+                (Err(e), connection.try_into_parts())
+            }
         }
     }
 

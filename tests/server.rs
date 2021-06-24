@@ -2335,6 +2335,43 @@ async fn http2_keep_alive_count_server_pings() {
         .expect("timed out waiting for pings");
 }
 
+#[tokio::test]
+async fn error_return() {
+    let _ = pretty_env_logger::try_init();
+
+    let listener = tcp_bind(&"127.0.0.1:0".parse().unwrap()).unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        let (socket, _) = listener.accept().await.expect("accept");
+        let (_r, o) = Http::new()
+            .error_return(true)
+            .serve_connection_with_parts(
+                socket,
+                service_fn(|req| {
+                    tokio::time::sleep(Duration::from_millis(2)).map(move |_| {
+                        // Move and drop the req, so we don't auto-close
+                        drop(req);
+                        Response::builder()
+                            .status(StatusCode::BAD_REQUEST)
+                            .body(hyper::Body::empty())
+                    })
+                }),
+            )
+            .await;
+        assert_eq!(o.unwrap().read_buf.as_ref().len(),19);
+    });
+
+    let mut tcp = connect_async(addr).await;
+    tcp.set_nodelay(true).unwrap();
+    tcp.write_all(b"HHHH TTTT PPPP aaaa").await.unwrap();
+
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    tcp.write_all(b"PPPPTTTTHHHH").await.unwrap();
+
+    tokio::time::sleep(Duration::from_secs(2)).await;
+}
+
 // -------------------------------------------------
 // the Server that is used to run all the tests with
 // -------------------------------------------------
