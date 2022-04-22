@@ -192,6 +192,7 @@ where
     ) -> Poll<Option<crate::Result<(MessageHead<T::Incoming>, DecodedLength, Wants)>>> {
         debug_assert!(self.can_read_head());
         trace!("Conn::read_head");
+
         let msg = match ready!(self.io.parse::<T>(
             cx,
             ParseContext {
@@ -215,6 +216,7 @@ where
             Ok(msg) => msg,
             Err(e) => return self.on_read_head_error(e),
         };
+
         // Note: don't deconstruct `msg` into local variables, it appears
         // the optimizer doesn't remove the extra copies.
 
