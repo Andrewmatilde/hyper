@@ -35,111 +35,9 @@ macro_rules! test {
             expected: $server_expected:expr,
             reply: $server_reply:expr,
         client:
-            request: {$(
-                $c_req_prop:ident: $c_req_val: tt,
-            )*},
-
-            response:
-                status: $client_status:ident,
-                headers: { $($response_header_name:expr => $response_header_val:expr,)* },
-                body: $response_body:expr,
-    ) => (
-        test! {
-            name: $name,
-            server:
-                expected: $server_expected,
-                reply: $server_reply,
-            client:
-                set_host: true,
-                request: {$(
-                    $c_req_prop: $c_req_val,
-                )*},
-
-                response:
-                    status: $client_status,
-                    headers: { $($response_header_name => $response_header_val,)* },
-                    body: $response_body,
-        }
-    );
-    (
-        name: $name:ident,
-        server:
-            expected: $server_expected:expr,
-            reply: $server_reply:expr,
-        client:
-            set_host: $set_host:expr,
-            request: {$(
-                $c_req_prop:ident: $c_req_val:tt,
-            )*},
-
-            response:
-                status: $client_status:ident,
-                headers: { $($response_header_name:expr => $response_header_val:expr,)* },
-                body: $response_body:expr,
-    ) => (
-        test! {
-            name: $name,
-            server:
-                expected: $server_expected,
-                reply: $server_reply,
-            client:
-                set_host: $set_host,
-                title_case_headers: false,
-                request: {$(
-                    $c_req_prop: $c_req_val,
-                )*},
-
-                response:
-                    status: $client_status,
-                    headers: { $($response_header_name => $response_header_val,)* },
-                    body: $response_body,
-        }
-    );
-    (
-        name: $name:ident,
-        server:
-            expected: $server_expected:expr,
-            reply: $server_reply:expr,
-        client:
-            set_host: $set_host:expr,
-            title_case_headers: $title_case_headers:expr,
-            request: {$(
-                $c_req_prop:ident: $c_req_val:tt,
-            )*},
-
-            response:
-                status: $client_status:ident,
-                headers: { $($response_header_name:expr => $response_header_val:expr,)* },
-                body: $response_body:expr,
-    ) => (
-        test! {
-            name: $name,
-            server:
-                expected: $server_expected,
-                reply: $server_reply,
-            client:
-                set_host: $set_host,
-                title_case_headers: $title_case_headers,
-                allow_h09_responses: false,
-                request: {$(
-                    $c_req_prop: $c_req_val,
-                )*},
-
-                response:
-                    status: $client_status,
-                    headers: { $($response_header_name => $response_header_val,)* },
-                    body: $response_body,
-        }
-    );
-    (
-        name: $name:ident,
-        server:
-            expected: $server_expected:expr,
-            reply: $server_reply:expr,
-        client:
-            set_host: $set_host:expr,
-            title_case_headers: $title_case_headers:expr,
-            allow_h09_responses: $allow_h09_responses:expr,
+            $(options: {$(
+                $c_opt_prop:ident: $c_opt_val:tt,
+            )*},)?
             request: {$(
                 $c_req_prop:ident: $c_req_val:tt,
             )*},
@@ -162,9 +60,9 @@ macro_rules! test {
                     expected: $server_expected,
                     reply: $server_reply,
                 client:
-                    set_host: $set_host,
-                    title_case_headers: $title_case_headers,
-                    allow_h09_responses: $allow_h09_responses,
+                    $(options: {$(
+                        $c_opt_prop: $c_opt_val,
+                    )*},)?
                     request: {$(
                         $c_req_prop: $c_req_val,
                     )*},
@@ -217,9 +115,6 @@ macro_rules! test {
                     expected: $server_expected,
                     reply: $server_reply,
                 client:
-                    set_host: true,
-                    title_case_headers: false,
-                    allow_h09_responses: false,
                     request: {$(
                         $c_req_prop: $c_req_val,
                     )*},
@@ -242,9 +137,9 @@ macro_rules! test {
             expected: $server_expected:expr,
             reply: $server_reply:expr,
         client:
-            set_host: $set_host:expr,
-            title_case_headers: $title_case_headers:expr,
-            allow_h09_responses: $allow_h09_responses:expr,
+            $(options: {$(
+                $c_opt_prop:ident: $c_opt_val:tt,
+            )*},)?
             request: {$(
                 $c_req_prop:ident: $c_req_val:tt,
             )*},
@@ -255,9 +150,7 @@ macro_rules! test {
 
         let connector = ::hyper::client::HttpConnector::new();
         let client = Client::builder()
-            .set_host($set_host)
-            .http1_title_case_headers($title_case_headers)
-            .http09_responses($allow_h09_responses)
+            $($(.$c_opt_prop($c_opt_val))*)?
             .build(connector);
 
         #[allow(unused_assignments, unused_mut)]
@@ -344,11 +237,11 @@ macro_rules! __client_req_prop {
 }
 
 macro_rules! __client_req_header {
-    ($req_builder:ident, { $($name:expr => $val:expr,)* }) => {
+    ($req_builder:ident, { $($name:expr => $val:expr,)* }) => {{
         $(
         $req_builder = $req_builder.header($name, $val);
         )*
-    }
+    }}
 }
 
 static REPLY_OK: &str = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
@@ -1086,7 +979,9 @@ test! {
             ",
 
     client:
-        set_host: false,
+        options: {
+            set_host: false,
+        },
         request: {
             method: GET,
             url: "http://{addr}/no-host/{addr}",
@@ -1114,8 +1009,9 @@ test! {
             ",
 
     client:
-        set_host: true,
-        title_case_headers: true,
+        options: {
+            http1_title_case_headers: true,
+        },
         request: {
             method: GET,
             url: "http://{addr}/",
@@ -1191,15 +1087,15 @@ test! {
     server:
         expected: "\
             GET / HTTP/1.1\r\n\
-            Host: {addr}\r\n\
+            host: {addr}\r\n\
             \r\n\
             ",
         reply: "Mmmmh, baguettes.",
 
     client:
-        set_host: true,
-        title_case_headers: true,
-        allow_h09_responses: true,
+        options: {
+            http09_responses: true,
+        },
         request: {
             method: GET,
             url: "http://{addr}/",
@@ -2312,6 +2208,63 @@ mod conn {
                 .unwrap();
             let mut res = client.send_request(req).await.expect("send_request");
             assert_eq!(res.status(), hyper::StatusCode::OK);
+            assert!(res.body_mut().next().await.is_none());
+        };
+
+        future::join(server, client).await;
+    }
+
+    #[tokio::test]
+    async fn get_obsolete_line_folding() {
+        let _ = ::pretty_env_logger::try_init();
+        let listener = TkTcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0)))
+            .await
+            .unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = async move {
+            let mut sock = listener.accept().await.unwrap().0;
+            let mut buf = [0; 4096];
+            let n = sock.read(&mut buf).await.expect("read 1");
+
+            // Notably:
+            // - Just a path, since just a path was set
+            // - No host, since no host was set
+            let expected = "GET /a HTTP/1.1\r\n\r\n";
+            assert_eq!(s(&buf[..n]), expected);
+
+            sock.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: \r\n 0\r\nLine-Folded-Header: hello\r\n world \r\n \r\n\r\n")
+                .await
+                .unwrap();
+        };
+
+        let client = async move {
+            let tcp = tcp_connect(&addr).await.expect("connect");
+            let (mut client, conn) = conn::Builder::new()
+                .http1_allow_obsolete_multiline_headers_in_responses(true)
+                .handshake::<_, Body>(tcp)
+                .await
+                .expect("handshake");
+
+            tokio::task::spawn(async move {
+                conn.await.expect("http conn");
+            });
+
+            let req = Request::builder()
+                .uri("/a")
+                .body(Default::default())
+                .unwrap();
+            let mut res = client.send_request(req).await.expect("send_request");
+            assert_eq!(res.status(), hyper::StatusCode::OK);
+            assert_eq!(res.headers().len(), 2);
+            assert_eq!(
+                res.headers().get(http::header::CONTENT_LENGTH).unwrap(),
+                "0"
+            );
+            assert_eq!(
+                res.headers().get("line-folded-header").unwrap(),
+                "hello   world"
+            );
             assert!(res.body_mut().next().await.is_none());
         };
 
